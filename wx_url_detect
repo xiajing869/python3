@@ -1,0 +1,99 @@
+1、	原理
+我们发现在微信中如果访问被封的域名时直接被微信重定向到support.weixin.qq.com（封堵的厉害）或者weixin110.qq.com（一般的封堵可以申诉）域名上，如果我们的域名经过微信服务器接口的检测，如果重定向以上域名那么我们可以认为域名已被封堵，问题又来啦如何经过微信的服务器，微信服务的接口从哪里获取？一般这种接口微信不会开放的，我们可以换一种思路，调用微信封装对外的接口，例如长链接转短链接接口。
+长链接转短链接接口规范：
+网址：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1443433600
+ 
+
+2、	使用python3.x开放实现
+一般的人员都没有开发者公众号，此时微信提供一个测试的公众号，测试号申请地址 https://mp.weixin.qq.com/debug/cgi-bin/sandbox?t=sandbox/login
+ 
+实现代码
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+__author__ = 'xiajing'
+import  requests
+import json
+
+
+"""
+方法get_access_token 获取微信access_token值：
+#https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421140183
+#http://www.pianshen.com/article/4855274152/
+"""
+def get_access_token(appID,appsecret):
+    get_access_token_url='https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s' %(appID,appsecret)
+    token_json=requests.get(url=get_access_token_url).json()
+    token=token_json.get('access_token')
+    return token
+
+"""
+create_wx_short_url 获取微信short url值：
+
+"""
+def create_wx_short_url(ck_url,tk):
+    access_token_string=tk
+#    access_token_string= '22_7oxGzGp-ZsqwENlD7Acl1bSJQaLh2hwvdUQh10_kDuEzVq1XEfKLMKtSozwxidSvwtzAOmIcN1TO9FbDSLvytMyS1ETeryCMFJnpZuCnY-UmJL89djUKuYc7YGsREARmCNKB852H8ot50m53NECjACAULJ'
+    wx_short_params = {
+        "access_token" : access_token_string,
+        "action" : "long2short",
+        "long_url": ck_url
+    }
+    short_url = 'https://api.weixin.qq.com/cgi-bin/shorturl?access_token=%s' % access_token_string
+    wx_response = requests.post(url=short_url,data=json.dumps(wx_short_params)).json()
+#    print(wx_response)
+    short_url = wx_response.get("short_url")
+    return short_url
+#domain=create_wx_short_url('http://suo.im')
+
+"""
+get_list_domain 获取域名列表：
+
+"""
+def get_list_domain():
+   with open('list_domain.txt',mode='r',encoding='utf-8') as f:
+       lists=f.readlines()
+   return  lists
+
+
+"""
+ck_domain 验证domain：
+
+"""
+def ck_domain(url,tk):
+    check_url = "http://%s" % url
+    print(check_url)
+    short_url = create_wx_short_url(check_url,tk)
+    return_url = requests.get(url=short_url, timeout=30).url
+    if ("support.weixin.qq.com" in return_url) or ("weixin110.qq.com" in return_url) :
+        str2=url
+        print("封号提醒", '域名' + url + '被封')
+        str1=("封号提醒", '域名' + url + '被封')
+        send_wxpy(str1,str2)
+    else:
+        str2=url
+        print("提醒", '域名' + url + '正常')
+        str1=("提醒", '域名' + url + '正常')
+        #send_wxpy(str1,str2)
+"""
+send_wxpy 发送微信告警：
+
+"""
+def send_wxpy(str1,str2):
+    str_wx=('urlXX' %(str1,str2)) #修改处 发告警接口
+    print(str_wx)
+    requests.get(str_wx)
+
+
+"""
+程序入口main方法：
+"""
+
+if __name__ == '__main__':
+    tk=get_access_token(appID, appsecret) #修改处
+    #print(tk)
+    lists_domain=get_list_domain()
+    lists=lists_domain[0]
+    lists=lists.split()
+    for i in lists:
+        #print(i)
+        ck_domain(i,tk)
